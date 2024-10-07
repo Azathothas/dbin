@@ -19,7 +19,7 @@ type Verbosity int8
 
 const (
 	unsupportedArchMsg                  = "Unsupported architecture: "
-	version                             = "0.5p_exp"
+	version                             = "0.5.1"
 	indicator                           = "...>"
 	maxCacheSize                        = 10
 	binariesToDelete                    = 5
@@ -104,9 +104,10 @@ func setupEnvironment() (string, string, string, []string, []string, bool, error
 	getMetadataURLs := func(arch string) []string {
 		// Default metadata URLs
 		defaultMetadataURLs := []string{
-			"https://raw.githubusercontent.com/xplshn/dbin-metadata/master/misc/cmd/modMetadata/Toolpacks.dbin_" + arch + ".json",
-			"https://raw.githubusercontent.com/xplshn/dbin-metadata/master/misc/cmd/modMetadata/Baseutils.dbin_" + arch + ".json",
-			"https://raw.githubusercontent.com/xplshn/dbin-metadata/master/misc/cmd/modMetadata/Toolpacks-extras.dbin_" + arch + ".json",
+			//	"https://raw.githubusercontent.com/xplshn/dbin-metadata/master/misc/cmd/modMetadata/Toolpacks.dbin_" + arch + ".json",
+			//	"https://raw.githubusercontent.com/xplshn/dbin-metadata/master/misc/cmd/modMetadata/Baseutils.dbin_" + arch + ".json",
+			//	"https://raw.githubusercontent.com/xplshn/dbin-metadata/master/misc/cmd/modMetadata/Toolpacks-extras.dbin_" + arch + ".json",
+			"https://github.com/xplshn/dbin-metadata/raw/refs/heads/master/misc/cmd/modMetadataAIO/unifiedAIO_" + arch + ".dbin.min.json",
 		}
 
 		// Parse DBIN_METADATA_URLS environment variable or return defaults
@@ -143,9 +144,11 @@ info              Show information about a specific binary OR display installed 
 search            Search for a binary - (not all binaries have metadata. Use list to see all binaries)
 tldr              Equivalent to "run --transparent --silent tlrc"`,
 			"3_Variables": `DBIN_CACHEDIR     If present, it must contain a valid directory path
-DBIN_INSTALL_DIR  If present, it must contain a valid directory path
-DBIN_NOTRUNCATION If present, and set to ONE (1), string truncation will be disabled
-DBIN_TRACKERFILE  If present, it must point to a valid file path, in an existing directory`,
+DBIN_INSTALL_DIR   If present, it must contain a valid directory path
+DBIN_NOTRUNCATION  If present, and set to ONE (1), string truncation will be disabled
+DBIN_TRACKERFILE   If present, it must point to a valid file path, in an existing directory
+DBIN_REPO_URLS     If present, it must contain one or more repository URLS ended in / separated by ;
+DBIN_METADATA_URLS If present, it must contain one or more repository's metadata url separated by ;`,
 			"4_Examples": `dbin search editor
 dbin install micro.upx
 dbin install lux kakoune aretext shfmt
@@ -153,6 +156,7 @@ dbin --silent install bed && echo "[bed] was installed to $INSTALL_DIR/bed"
 dbin del bed
 dbin del orbiton tgpt lux
 dbin info
+dbin info | grep a-utils | xargs dbin add # install the entire a-utils suite
 dbin info jq
 dbin list --described
 dbin tldr gum
@@ -357,29 +361,44 @@ dbin run btop`,
 			if binaryInfo.Description != "" {
 				fmt.Printf("Description: %s\n", binaryInfo.Description)
 			}
-			if binaryInfo.Repo != "" {
-				fmt.Printf("Repo: %s\n", binaryInfo.Repo)
-			}
-			if binaryInfo.Updated != "" {
-				fmt.Printf("Updated: %s\n", binaryInfo.Updated)
+			if binaryInfo.Note != "" {
+				fmt.Printf("Note: %s\n", binaryInfo.Note)
 			}
 			if binaryInfo.Version != "" {
 				fmt.Printf("Version: %s\n", binaryInfo.Version)
 			}
+			if binaryInfo.DownloadURL != "" {
+				fmt.Printf("Download URL: %s\n", binaryInfo.DownloadURL)
+			}
 			if binaryInfo.Size != "" {
 				fmt.Printf("Size: %s\n", binaryInfo.Size)
 			}
-			if binaryInfo.Source != "" {
-				fmt.Printf("Source: %s\n", binaryInfo.Source)
+			if binaryInfo.Bsum != "" {
+				fmt.Printf("B3SUM: %s\n", binaryInfo.Bsum)
 			}
-			if binaryInfo.Note != "" {
-				fmt.Printf("Note: %s\n", binaryInfo.Note)
+			if binaryInfo.Shasum != "" {
+				fmt.Printf("SHA256: %s\n", binaryInfo.Shasum)
 			}
-			if binaryInfo.B3sum != "" {
-				fmt.Printf("B3SUM: %s\n", binaryInfo.B3sum)
+			if binaryInfo.BuildDate != "" {
+				fmt.Printf("Build Date: %s\n", binaryInfo.BuildDate)
 			}
-			if binaryInfo.Sha256 != "" {
-				fmt.Printf("SHA256: %s\n", binaryInfo.B3sum)
+			if binaryInfo.SrcURL != "" {
+				fmt.Printf("Source URL: %s\n", binaryInfo.SrcURL)
+			}
+			if binaryInfo.WebURL != "" {
+				fmt.Printf("Web URL: %s\n", binaryInfo.WebURL)
+			}
+			if binaryInfo.BuildScript != "" {
+				fmt.Printf("Build Script: %s\n", binaryInfo.BuildScript)
+			}
+			if binaryInfo.BuildLog != "" {
+				fmt.Printf("Build Log: %s\n", binaryInfo.BuildLog)
+			}
+			if binaryInfo.Category != "" {
+				fmt.Printf("Category: %s\n", binaryInfo.Category)
+			}
+			if binaryInfo.ExtraBins != "" {
+				fmt.Printf("Extra Bins: %s\n", binaryInfo.ExtraBins)
 			}
 		}
 	case "run":
