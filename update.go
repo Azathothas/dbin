@@ -2,20 +2,15 @@
 package main
 
 import (
-	"encoding/hex"
 	"fmt"
-	"io"
-	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
-
-	"github.com/zeebo/blake3"
 )
 
 // update checks for updates to the valid programs and installs any that have changed.
-func update(config *Config, programsToUpdate []string, verbosityLevel Verbosity) error {
+func update(config *Config, programsToUpdate []string, verbosityLevel Verbosity, metadata map[string]interface{}) error {
 
 	// Initialize counters
 	var (
@@ -26,7 +21,7 @@ func update(config *Config, programsToUpdate []string, verbosityLevel Verbosity)
 	)
 
 	// Call validateProgramsFrom with config and programsToUpdate
-	programsToUpdate, err := validateProgramsFrom(config, programsToUpdate)
+	programsToUpdate, err := validateProgramsFrom(config, programsToUpdate, metadata)
 	if err != nil {
 		return err
 	}
@@ -63,7 +58,7 @@ func update(config *Config, programsToUpdate []string, verbosityLevel Verbosity)
 				progressMutex.Unlock()
 				return
 			}
-			localB3sum, err := getLocalB3sum(installPath)
+			localB3sum, err := calculateChecksum(installPath)
 			if err != nil {
 				progressMutex.Lock()
 				atomic.AddUint32(&checked, 1)
@@ -75,7 +70,7 @@ func update(config *Config, programsToUpdate []string, verbosityLevel Verbosity)
 				return
 			}
 
-			binaryInfo, err := getBinaryInfo(config, program)
+			binaryInfo, err := getBinaryInfo(config, program, metadata)
 			if err != nil {
 				progressMutex.Lock()
 				atomic.AddUint32(&checked, 1)
@@ -99,7 +94,7 @@ func update(config *Config, programsToUpdate []string, verbosityLevel Verbosity)
 			}
 
 			if checkDifferences(localB3sum, binaryInfo.Bsum) == 1 {
-				err := installCommand(config, []string{program}, verbosityLevel)
+				err := installCommand(config, []string{program}, verbosityLevel, metadata)
 				if err != nil {
 					progressMutex.Lock()
 					atomic.AddUint32(&errors, 1)
@@ -144,31 +139,6 @@ func update(config *Config, programsToUpdate []string, verbosityLevel Verbosity)
 	}
 
 	return nil
-}
-
-// getLocalB3sum calculates the B3sum checksum of the local file.
-func getLocalB3sum(filePath string) (checksum string, err error) {
-	// Open the file for reading
-	file, err := os.Open(filePath)
-	if err != nil {
-		return "", fmt.Errorf("failed to open file %s: %v", filePath, err)
-	}
-	// Ensure the file is closed when the function returns
-	defer func() {
-		if cerr := file.Close(); cerr != nil && err == nil {
-			err = fmt.Errorf("failed to close file %s: %v", filePath, cerr)
-		}
-	}()
-
-	// Calculate B3sum checksum
-	hasher := blake3.New()
-	if _, err := io.Copy(hasher, file); err != nil {
-		return "", fmt.Errorf("failed to compute B3SUM of %s: %v", filePath, err)
-	}
-
-	// Return checksum as a hex string
-	checksum = hex.EncodeToString(hasher.Sum(nil))
-	return checksum, nil
 }
 
 // checkDifferences compares local and remote B3sum checksums.
