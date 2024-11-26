@@ -296,11 +296,6 @@ func main() {
 			metadata.Pkg = processItems(metadata.Pkg, realArchs, validatedArchs, repo, "pkg")
 			metadata.Base = processItems(metadata.Base, realArchs, validatedArchs, repo, "base")
 
-			// Update popularity rank
-			updatePopularityRank(metadata.Pkg, popularityMap, idMap)
-			updatePopularityRank(metadata.Bin, popularityMap, idMap)
-			updatePopularityRank(metadata.Base, popularityMap, idMap)
-
 			// Download additional metadata.json from the specified URL
 			additionalMetadataURL := "https://github.com/xplshn/AppBundleHUB/releases/download/latest_metadata/metadata.json"
 			additionalMetadata, err := downloadJSON(additionalMetadataURL)
@@ -310,9 +305,14 @@ func main() {
 			}
 
 			// Merge the additional metadata into the main metadata
-			//metadata.Base = mergeItems(metadata.Base, additionalMetadata.Base)
-			//metadata.Bin = mergeItems(metadata.Bin, additionalMetadata.Bin)
+			metadata.Base = mergeItems(metadata.Base, additionalMetadata.Base)
+			metadata.Bin = mergeItems(metadata.Bin, additionalMetadata.Bin)
 			metadata.Pkg = mergeItems(metadata.Pkg, additionalMetadata.Pkg)
+
+			// Update popularity rank
+			//updatePopularityRank(metadata.Base, popularityMap, idMap)
+			//updatePopularityRank(metadata.Bin, popularityMap, idMap)
+			updatePopularityRank(metadata.Pkg, popularityMap, idMap)
 
 			// Save the processed metadata to a JSON file
 			outputFile := fmt.Sprintf("METADATA_AIO_%s.json", arch)
