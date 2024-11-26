@@ -1,5 +1,3 @@
-// I know it's unrelated to `dbin`, sorry to whomever sees this in the future, I'm too lazy to write a directory structure doc... 
-// Basically, this for AppBundleHUB (github.com/xplshn/AppBundleHUB) to be used by the AM package manager
 package main
 
 import (
@@ -11,7 +9,7 @@ import (
 	"strings"
 )
 
-const pipeRepl = "ǀ" // Replacement for `|` // In order to avoid breakign the MD table
+const pipeRepl = "ǀ" // Replacement for `|` to avoid breaking the MD table
 
 type Metadata struct {
 	Bin  []Package `json:"bin"`
@@ -31,11 +29,32 @@ type Package struct {
 
 // Utility function to replace `|` in string fields
 func replacePipeFields(pkg *Package) {
-	pkg.Pkg = strings.ReplaceAll(pkg.Pkg, "|", pipeRepl)
+	pkg.PkgName = strings.ReplaceAll(pkg.PkgName, "|", pipeRepl)
 	pkg.Description = strings.ReplaceAll(pkg.Description, "|", pipeRepl)
 	pkg.SrcURL = strings.ReplaceAll(pkg.SrcURL, "|", pipeRepl)
 	pkg.Homepage = strings.ReplaceAll(pkg.Homepage, "|", pipeRepl)
 	pkg.DownloadURL = strings.ReplaceAll(pkg.DownloadURL, "|", pipeRepl)
+}
+
+// Utility function to replace empty strings with "nil"
+func replaceEmptyWithNil(value string) string {
+	if value == "" {
+		return "nil"
+	}
+	return value
+}
+
+// Utility function to process PkgName as required
+func processPkgName(pkgName string) string {
+	// Step 1: Convert to lowercase
+	pkgName = strings.ToLower(pkgName)
+	// Step 2: Replace spaces with hyphens
+	pkgName = strings.ReplaceAll(pkgName, " ", "-")
+	// Step 3: Append `.appbundle` if not already present
+	if !strings.HasSuffix(pkgName, ".appbundle") {
+		pkgName += ".dwfs.appbundle"
+	}
+	return pkgName
 }
 
 func main() {
@@ -68,33 +87,41 @@ func main() {
 	}
 	defer file.Close()
 
-	// file.WriteString("| name | description | weburl | download_url | b3sum[0..12] |\n")
-	// file.WriteString("|------|-------------|--------|---------------|--------------|\n")
-
 	// Process each package and write to the file
 	for _, pkg := range append(append(metadata.Bin, metadata.Pkg...), metadata.Base...) {
+		// Replace empty fields with "nil"
+		pkg.PkgName = replaceEmptyWithNil(pkg.PkgName)
+		pkg.Description = replaceEmptyWithNil(pkg.Description)
+		pkg.SrcURL = replaceEmptyWithNil(pkg.SrcURL)
+		pkg.Homepage = replaceEmptyWithNil(pkg.Homepage)
+		pkg.DownloadURL = replaceEmptyWithNil(pkg.DownloadURL)
+
+		// If both SrcURL and Homepage are empty, fall back to "nil"
 		webURL := pkg.SrcURL
-		if webURL == "" {
+		if webURL == "nil" {
 			webURL = pkg.Homepage
 		}
-		if webURL == "" {
+		if webURL == "nil" {
 			webURL = pkg.DownloadURL
 		}
 
 		// Replace `|` in fields
 		replacePipeFields(&pkg)
 
+		// Process PkgName
+		pkgName := processPkgName(pkg.PkgName)
+
 		// Handle bsum
 		bsum := pkg.Bsum
 		if len(bsum) > 12 {
 			bsum = bsum[:12]
-		} else if bsum == "" {
+		} else {
 			bsum = "nil"
 		}
 
 		// Write formatted data to file
 		file.WriteString(fmt.Sprintf("| %s | %s | %s | %s | %s |\n",
-			pkg.Pkg, pkg.Description, webURL, pkg.DownloadURL, bsum))
+			pkgName, pkg.Description, webURL, pkg.DownloadURL, bsum))
 	}
 
 	fmt.Println("Data has been written to AM.txt")
