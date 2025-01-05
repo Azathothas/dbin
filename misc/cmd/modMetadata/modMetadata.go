@@ -1,113 +1,129 @@
-// We modify the metadata of the repos to have the name fields of each binary reflect the directory they're in in the repo.
 package main
 
 import (
 	"fmt"
-	"github.com/goccy/go-json"
-	"io/ioutil"
+	"io"
 	"net/http"
-	"net/url"
+	"os"
 	"strings"
 
+	"github.com/goccy/go-json"
 	minify "github.com/tdewolff/minify/v2"
 	mjson "github.com/tdewolff/minify/v2/json"
 )
 
-type labeledString struct {
-	mainURL           string
-	fallbackURL       string
-	label             string
-	resolveToFinalURL bool
+type PkgForgeItem struct {
+	RealName    string   `json:"pkg"`
+	Name        string   `json:"pkg_name"`
+	Family      string   `json:"pkg_family"`
+	BinId       string   `json:"pkg_id"`
+	Icon        string   `json:"icon,omitempty"`
+	Description string   `json:"description,omitempty"`
+	Homepage    []string `json:"homepage,omitempty"`
+	Version     string   `json:"version,omitempty"`
+	DownloadURL string   `json:"download_url,omitempty"`
+	Size        string   `json:"size,omitempty"`
+	Bsum        string   `json:"bsum,omitempty"`
+	Shasum      string   `json:"shasum,omitempty"`
+	BuildDate   string   `json:"build_date,omitempty"`
+	SrcURL      []string `json:"src_url,omitempty"`
+	BuildScript string   `json:"build_script,omitempty"`
+	BuildLog    string   `json:"build_log,omitempty"`
+	Category    []string `json:"category,omitempty"`
+	ExtraBins   []string `json:"provides,omitempty"`
+	Note        []string `json:"note,omitempty"`
 }
 
-type Item struct {
-	Name         string `json:"name"`
-	B3sum        string `json:"b3sum,omitempty"`
-	Sha256       string `json:"sha256,omitempty"`
-	Description  string `json:"description,omitempty"`
-	DownloadURL  string `json:"download_url,omitempty"`
-	Size         string `json:"size,omitempty"`
-	RepoURL      string `json:"repo_url,omitempty"`
-	RepoAuthor   string `json:"repo_author,omitempty"`
-	RepoInfo     string `json:"repo_info,omitempty"`
-	RepoUpdated  string `json:"repo_updated,omitempty"`
-	RepoReleased string `json:"repo_released,omitempty"`
-	RepoVersion  string `json:"repo_version,omitempty"`
-	RepoStars    string `json:"repo_stars,omitempty"`
-	RepoLanguage string `json:"repo_language,omitempty"`
-	RepoLicense  string `json:"repo_license,omitempty"`
-	RepoTopics   string `json:"repo_topics,omitempty"`
-	WebURL       string `json:"web_url,omitempty"`
-	BuildScript  string `json:"build_script,omitempty"`
-	ExtraBins    string `json:"extra_bins,omitempty"`
-	BuildDate    string `json:"build_date,omitempty"`
-	Note         string `json:"note,omitempty"`
-	Bsum         string `json:"bsum,omitempty"`
-	Shasum       string `json:"shasum,omitempty"`
-	Category     string `json:"category,omitempty"`
+type DbinItem struct {
+	RealName        string   `json:"pkg"`
+	Name            string   `json:"pkg_name"`
+	BinId           string   `json:"pkg_id,omitempty"`
+	Icon            string   `json:"icon,omitempty"`
+	Description     string   `json:"description,omitempty"`
+	LongDescription string   `json:"description_long,omitempty"`
+	Screenshots     []string `json:"screenshots,omitempty"`
+	Version         string   `json:"version,omitempty"`
+	DownloadURL     string   `json:"download_url,omitempty"`
+	Size            string   `json:"size,omitempty"`
+	Bsum            string   `json:"bsum,omitempty"`
+	Shasum          string   `json:"shasum,omitempty"`
+	BuildDate       string   `json:"build_date,omitempty"`
+	SrcURL          string   `json:"src_url,omitempty"`
+	WebURL          string   `json:"homepage,omitempty"`
+	BuildScript     string   `json:"build_script,omitempty"`
+	BuildLog        string   `json:"build_log,omitempty"`
+	Category        string   `json:"category,omitempty"`
+	ExtraBins       string   `json:"provides,omitempty"`
+	Note            string   `json:"note,omitempty"`
+	Appstream       string   `json:"appstream,omitempty"`
 }
 
-func urldecode(encoded string) (string, error) {
-	return url.PathUnescape(encoded)
+type DbinMetadata struct {
+	Bin  []DbinItem `json:"bin"`
+	Pkg  []DbinItem `json:"pkg"`
+	Base []DbinItem `json:"base"`
 }
 
-func processItems(items []Item, realArchs, validatedArchs []string, repo labeledString) []Item {
-	for i, item := range items {
-		// Map fields from new to old format
-		if items[i].Shasum != "" || items[i].Bsum != "" {
-			items[i].Shasum = items[i].Sha256 // direct mapping from "shasum"
-			items[i].Bsum = items[i].B3sum    // direct mapping from "bsum"
-		}
+func convertPkgForgeToDbinItem(item PkgForgeItem) DbinItem {
+	var webURL, srcURL, category, note string
 
-		// If resolveToFinalURL is false, skip URL transformation
-		if !repo.resolveToFinalURL {
-			continue
-		}
-
-		// Parse the download URL to get its path
-		parsedURL, err := url.Parse(item.DownloadURL)
-		if err != nil {
-			continue
-		}
-
-		// Extract the path from the URL and remove leading slashes
-		cleanPath := parsedURL.Path
-		if strings.HasPrefix(cleanPath, "/") {
-			cleanPath = cleanPath[1:]
-		}
-
-		// Remove the architecture-specific path from the download URL path
-		for _, prefix := range append(realArchs, validatedArchs...) {
-			if strings.HasPrefix(cleanPath, prefix) {
-				cleanPath = strings.TrimPrefix(cleanPath, prefix+"/")
-				break
-			}
-		}
-
-		// Remove the repo's label
-		if strings.HasPrefix(cleanPath, repo.label+"/") {
-			cleanPath = strings.TrimPrefix(cleanPath, repo.label+"/")
-		}
-
-		// Set the correct `Name` field based on the path
-		items[i].Name = cleanPath
+	if len(item.Homepage) > 0 {
+		webURL = item.Homepage[0]
 	}
-	return items
+
+	if len(item.SrcURL) > 0 {
+		srcURL = item.SrcURL[0]
+	}
+
+	if len(item.Category) > 0 {
+		category = item.Category[0]
+	}
+
+	if len(item.Note) > 0 {
+		note = item.Note[0]
+	}
+
+	// Convert provides array to comma-separated string
+	var provides string
+	if len(item.ExtraBins) > 0 {
+		provides = strings.Join(item.ExtraBins, ",")
+	}
+
+	return DbinItem{
+		RealName:    t(item.Family == item.Name, item.Name, fmt.Sprintf("%s/%s", item.Family, item.Name)), // If item.Name != item.Family, use item.Family/item.Name
+		Name:        item.Name,
+		BinId:       item.BinId,
+		Icon:        item.Icon,
+		Description: item.Description,
+		Version:     item.Version,
+		DownloadURL: item.DownloadURL,
+		Size:        item.Size,
+		Bsum:        item.Bsum,
+		Shasum:      item.Shasum,
+		BuildDate:   item.BuildDate,
+		SrcURL:      srcURL,
+		WebURL:      webURL,
+		BuildScript: item.BuildScript,
+		BuildLog:    item.BuildLog,
+		Category:    category,
+		ExtraBins:   provides,
+		Note:        note,
+	}
 }
 
-func downloadJSON(url string) ([]Item, error) {
+func downloadJSON(url string) ([]PkgForgeItem, error) {
 	resp, err := http.Get(url)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
 
-	var items []Item
+	var items []PkgForgeItem
 	err = json.Unmarshal(body, &items)
 	if err != nil {
 		return nil, err
@@ -116,108 +132,107 @@ func downloadJSON(url string) ([]Item, error) {
 	return items, nil
 }
 
-func saveJSON(filename string, items []Item) error {
-	// Marshal JSON with indentation
-	jsonData, err := json.MarshalIndent(items, "", "  ")
+func saveJSON(filename string, metadata DbinMetadata) error {
+	jsonData, err := json.MarshalIndent(metadata, "", "  ")
 	if err != nil {
 		return err
 	}
 
-	// Write the pretty-printed JSON to the file
-	err = ioutil.WriteFile(filename, jsonData, 0644)
+	err = os.WriteFile(filename, jsonData, 0644)
 	if err != nil {
 		return err
 	}
 
-	// Minify and save the file
 	return minifyJSON(filename, jsonData)
 }
 
 func minifyJSON(filename string, jsonData []byte) error {
-	// Create a new minifier
 	m := minify.New()
 	m.AddFunc("application/json", mjson.Minify)
 
-	// Minify the JSON data
 	minifiedData, err := m.Bytes("application/json", jsonData)
 	if err != nil {
 		return err
 	}
 
-	// Create the minified file name
 	minFilename := strings.TrimSuffix(filename, ".json") + ".min.json"
-
-	// Write the minified data to a new file
-	err = ioutil.WriteFile(minFilename, minifiedData, 0644)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func downloadWithFallback(repo labeledString) ([]Item, error) {
-	items, err := downloadJSON(repo.mainURL)
-	if err == nil {
-		fmt.Printf("Downloaded JSON from: %s\n", repo.mainURL)
-		return items, nil
-	}
-
-	fmt.Printf("Error downloading from main URL %s: %v. Trying fallback URL...\n", repo.mainURL, err)
-	items, err = downloadJSON(repo.fallbackURL)
-	if err == nil {
-		fmt.Printf("Downloaded JSON from fallback URL: %s\n", repo.fallbackURL)
-		return items, nil
-	}
-
-	fmt.Printf("Error downloading from fallback URL %s: %v\n", repo.fallbackURL, err)
-	return nil, err
+	return os.WriteFile(minFilename, minifiedData, 0644)
 }
 
 func main() {
-	validatedArchs := []string{"amd64_linux", "arm64_linux", "arm64_android"}
-	realArchs := []string{"x86_64_Linux", "aarch64_Linux", "aarch64_arm64_Linux", "arm64_v8a_Android", "x64_Windows"}
+	realArchs := []string{"x86_64-Linux", "aarch64-Linux"}
 
-	// Loop over the indices to access both validatedArchs and realArchs
-	for i := range validatedArchs {
-		arch := validatedArchs[i]
-		realArch := realArchs[i]
+	for _, arch := range realArchs {
+		pkgforgeURL := fmt.Sprintf("https://meta.pkgforge.dev/bincache/%s.json", arch)
 
-		repos := []labeledString{
-			{"https://bin.ajam.dev/" + arch + "/METADATA.json",
-				"https://huggingface.co/datasets/Azathothas/Toolpacks-Snapshots/resolve/main/" + arch + "/METADATA.json?download=true",
-				"Toolpacks", true},
-			{"https://bin.ajam.dev/" + arch + "/Baseutils/METADATA.json",
-				"https://huggingface.co/datasets/Azathothas/Toolpacks-Snapshots/resolve/main/Baseutils/METADATA.json?download=true",
-				"Baseutils", true},
-			{"https://pkg.ajam.dev/" + arch + "/METADATA.json?download=true",
-				"https://pkg.ajam.dev/",
-				"Toolpacks-extras", false}, // Skip URL path transformation for Toolpacks-extras
+		// Download and parse pkgforge metadata
+		pkgforgeItems, err := downloadJSON(pkgforgeURL)
+		if err != nil {
+			fmt.Printf("Error downloading pkgforge metadata from %s: %v\n", pkgforgeURL, err)
+			continue
 		}
 
-		for _, repo := range repos {
-			items, err := downloadWithFallback(repo)
-			if err != nil {
-				fmt.Printf("Error downloading JSON from both main and fallback URLs for repo %s: %v\n", repo.label, err)
-				continue
+		// Download AppBundleHUB metadata
+		appbundleURL := "https://github.com/xplshn/AppBundleHUB/releases/download/latest_metadata/metadata.json"
+		var appbundleMetadata DbinMetadata
+		resp, err := http.Get(appbundleURL)
+		if err == nil {
+			defer resp.Body.Close()
+			if body, err := io.ReadAll(resp.Body); err == nil {
+				json.Unmarshal(body, &appbundleMetadata)
 			}
+		}
 
-			save := func(outputFile string, processedItems []Item) {
-				if err := saveJSON(outputFile, processedItems); err != nil {
-					fmt.Printf("Error saving JSON to %s: %v\n", outputFile, err)
-					return
+		// Convert pkgforge items to dbin format
+		var dbinMetadata DbinMetadata
+		bsumMap := make(map[string]DbinItem)
+
+		for _, item := range pkgforgeItems {
+			dbinItem := convertPkgForgeToDbinItem(item)
+
+			// Check if the b3sum already exists in the map
+			if existingItem, exists := bsumMap[dbinItem.Bsum]; exists {
+				// Keep the item with the shortest name
+				if len(dbinItem.Name) < len(existingItem.Name) {
+					bsumMap[dbinItem.Bsum] = dbinItem
 				}
-				fmt.Printf("Processed and saved to %s\n", outputFile)
+			} else {
+				bsumMap[dbinItem.Bsum] = dbinItem
 			}
-
-			processedItems := processItems(items, realArchs, validatedArchs, repo)
-
-			// 0.FOURTH compat
-			outputFile := fmt.Sprintf("%s.dbin_%s.json", repo.label, realArch)
-			save(outputFile, processedItems)
-			// New dbin
-			outputFile = fmt.Sprintf("%s.dbin_%s.json", repo.label, arch)
-			save(outputFile, processedItems)
 		}
+
+		// Add items to the appropriate section based on pkg_type
+		for _, item := range bsumMap {
+			switch {
+			case strings.HasSuffix(item.RealName, ".static"):
+				dbinMetadata.Bin = append(dbinMetadata.Bin, item)
+			case strings.HasSuffix(item.RealName, ".dynamic"):
+				dbinMetadata.Pkg = append(dbinMetadata.Pkg, item)
+			default:
+				dbinMetadata.Base = append(dbinMetadata.Base, item)
+			}
+		}
+
+		// Merge with AppBundleHUB metadata if available
+		if len(appbundleMetadata.Pkg) > 0 {
+			dbinMetadata.Pkg = append(dbinMetadata.Pkg, appbundleMetadata.Pkg...)
+		}
+
+		// Save the processed metadata
+		outputFile := fmt.Sprintf("METADATA_AIO_%s.json", arch)
+		if err := saveJSON(outputFile, dbinMetadata); err != nil {
+			fmt.Printf("Error saving metadata to %s: %v\n", outputFile, err)
+			continue
+		}
+
+		fmt.Printf("Successfully processed and saved metadata to %s\n", outputFile)
 	}
+}
+
+// Helper function
+func t[T any](cond bool, vtrue, vfalse T) T {
+	if cond {
+		return vtrue
+	}
+	return vfalse
 }
