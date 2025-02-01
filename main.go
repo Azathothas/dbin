@@ -49,7 +49,8 @@ eget2             Equivalent to "--silent run --transparent eget2"`,
 DBIN_INSTALL_DIR   If present, it must contain a valid directory path
 DBIN_NOTRUNCATION  If present, and set to ONE (1), string truncation will be disabled
 DBIN_REPO_URLS     If present, it must contain one or more repository URLS ended in / separated by ;
-DBIN_METADATA_URLS If present, it must contain one or more repository's metadata url separated by ;`,
+DBIN_METADATA_URLS If present, it must contain one or more repository's metadata url separated by ;
+DBIN_REOWN         If present, and set to ONE (1), it makes dbin update programs that may not have been installed by dbin`,
 			"4_Examples": `dbin search editor
 dbin install micro.upx
 dbin install lux kakoune aretext shfmt
@@ -64,7 +65,7 @@ dbin tldr gum
 dbin --verbose run curl -qsfSL "https://raw.githubusercontent.com/xplshn/dbin/master/stubdl" | sh -
 dbin --silent run elinks -no-home "https://fatbuffalo.neocities.org/def"
 dbin --silent run --transparent micro ~/.profile
-dbin run btop`,
+dbin run firefox "https://www.paypal.com/donate/?hosted_button_id=77G7ZFXVZ44EE" # Donate?`,
 		},
 	}
 
@@ -344,7 +345,7 @@ dbin run btop`,
 				{"Web URL", binaryInfo.WebURL},
 				{"Build Script", binaryInfo.BuildScript},
 				{"Build Log", binaryInfo.BuildLog},
-				{"Category", binaryInfo.Category},
+				{"Categories", binaryInfo.Categories},
 				{"Extra Bins", binaryInfo.ExtraBins},
 			}
 
