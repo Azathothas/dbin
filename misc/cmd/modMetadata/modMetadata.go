@@ -60,13 +60,13 @@ type DbinItem struct {
 	Bsum            string   `json:"bsum,omitempty"`
 	Shasum          string   `json:"shasum,omitempty"`
 	BuildDate       string   `json:"build_date,omitempty"`
-	SrcURL          []string `json:"src_url,omitempty"`
-	Homepage        []string `json:"homepage,omitempty"`
+	SrcURLs         []string `json:"src_urls,omitempty"`
+	WebURLs         []string `json:"web_urls,omitempty"`
 	BuildScript     string   `json:"build_script,omitempty"`
 	BuildLog        string   `json:"build_log,omitempty"`
 	Categories      string   `json:"categories,omitempty"`
 	Provides        string   `json:"provides,omitempty"`
-	Note            []string `json:"note,omitempty"`
+	Note            []string `json:"notes,omitempty"`
 	Appstream       string   `json:"appstream,omitempty"`
 	GhcrBlob        string   `json:"ghcr_blob,omitempty"`
 	Rank            string   `json:"rank,omitempty"`
@@ -165,14 +165,14 @@ func convertPkgForgeToDbinItem(item PkgForgeItem) DbinItem {
 		Bsum:        item.Bsum,
 		Shasum:      item.Shasum,
 		BuildDate:   item.BuildDate,
-		SrcURL:      item.SrcURL,
-		Homepage:    item.Homepage,
+		SrcURLs:     item.SrcURL,
+		WebURLs:     item.Homepage,
 		BuildScript: item.BuildScript,
 		BuildLog:    item.BuildLog,
 		Categories:  categories,
 		Provides:    provides,
 		Note:        item.Note,
-		GhcrBlob:     item.GhcrBlob,
+		GhcrBlob:    item.GhcrBlob,
 		Rank:        item.Rank,
 	}
 }
