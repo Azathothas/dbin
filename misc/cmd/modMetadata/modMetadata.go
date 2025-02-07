@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/goccy/go-json"
@@ -66,10 +67,10 @@ type DbinItem struct {
 	BuildLog        string   `json:"build_log,omitempty"`
 	Categories      string   `json:"categories,omitempty"`
 	Provides        string   `json:"provides,omitempty"`
-	Note            []string `json:"notes,omitempty"`
+	Notes           []string `json:"notes,omitempty"`
 	Appstream       string   `json:"appstream,omitempty"`
 	GhcrBlob        string   `json:"ghcr_blob,omitempty"`
-	Rank            string   `json:"rank,omitempty"`
+	Rank            uint16   `json:"rank,omitempty"`
 }
 
 type DbinMetadata map[string][]DbinItem
@@ -158,6 +159,8 @@ func convertPkgForgeToDbinItem(item PkgForgeItem) DbinItem {
 		item.DownloadURL = strings.Replace(item.HfPkg, "/tree/main", "/resolve/main", 1) + "/" + item.Pkg
 	}
 
+	rank, _ := strconv.ParseUint(item.Rank, 10, 16)
+
 	return DbinItem{
 		Pkg:         fmt.Sprintf("%s%s", t(item.Family == item.Name, item.Name, fmt.Sprintf("%s/%s", item.Family, item.Name)), t(item.PkgType != "static", "."+item.PkgType, "")),
 		Name:        item.Name,
@@ -177,9 +180,9 @@ func convertPkgForgeToDbinItem(item PkgForgeItem) DbinItem {
 		BuildLog:    item.BuildLog,
 		Categories:  categories,
 		Provides:    provides,
-		Note:        item.Note,
+		Notes:       item.Note,
 		GhcrBlob:    item.GhcrBlob,
-		Rank:        item.Rank,
+		Rank:        uint16(rank),
 	}
 }
 
