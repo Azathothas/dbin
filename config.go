@@ -6,23 +6,23 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strconv"
 	"strings"
-	"runtime"
 
 	"github.com/goccy/go-json"
 )
 
 type Config struct {
-	RepoURLs            []string        `json:"repo_urls" env:"DBIN_REPO_URLS"`
-	InstallDir          string          `json:"install_dir" env:"DBIN_INSTALL_DIR XDG_BIN_HOME"`
-	CacheDir            string          `json:"cache_dir" env:"DBIN_CACHEDIR"`
-	Limit               uint            `json:"fsearch_limit"`
-	ProgressbarStyle    int             `json:"progressbar_style,omitempty"`
-	DisableTruncation   bool            `json:"disable_truncation" env:"DBIN_NOTRUNCATION"`
-	RetakeOwnership     bool            `json:"retake_ownership" env:"DBIN_REOWN"`
-	UseIntegrationHooks bool            `json:"use_integration_hooks" env:"DBIN_USEHOOKS"`
-	Hooks               Hooks           `json:"integration_hooks,omitempty"`
+	RepoURLs            []string `json:"repo_urls" env:"DBIN_REPO_URLS"`
+	InstallDir          string   `json:"install_dir" env:"DBIN_INSTALL_DIR XDG_BIN_HOME"`
+	CacheDir            string   `json:"cache_dir" env:"DBIN_CACHEDIR"`
+	Limit               uint     `json:"fsearch_limit"`
+	ProgressbarStyle    int      `json:"progressbar_style,omitempty"`
+	DisableTruncation   bool     `json:"disable_truncation" env:"DBIN_NOTRUNCATION"`
+	RetakeOwnership     bool     `json:"retake_ownership" env:"DBIN_REOWN"`
+	UseIntegrationHooks bool     `json:"use_integration_hooks" env:"DBIN_USEHOOKS"`
+	Hooks               Hooks    `json:"integration_hooks,omitempty"`
 }
 
 type Hooks struct {
@@ -38,7 +38,7 @@ type HookCommands struct {
 	NoOp                  bool     `json:"nop"`
 }
 
-func executeHookCommand(config *Config, cmdTemplate, binaryPath, extension string, isIntegration bool, verbosityLevel Verbosity, metadata map[string]interface{}) error {
+func executeHookCommand(config *Config, cmdTemplate, bEntryPath, extension string, isIntegration bool, verbosityLevel Verbosity, metadata map[string]interface{}) error {
 	hookCommands, exists := config.Hooks.Commands[extension]
 	if !exists {
 		return fmt.Errorf("no commands found for extension: %s", extension)
@@ -48,7 +48,7 @@ func executeHookCommand(config *Config, cmdTemplate, binaryPath, extension strin
 		return nil
 	}
 
-	cmd := strings.ReplaceAll(cmdTemplate, "{{binary}}", binaryPath)
+	cmd := strings.ReplaceAll(cmdTemplate, "{{binary}}", bEntryPath)
 	useRunFromCache := hookCommands.UseRunFromCache
 	commandParts := strings.Fields(cmd)
 	if len(commandParts) == 0 {
@@ -72,7 +72,7 @@ func executeHookCommand(config *Config, cmdTemplate, binaryPath, extension strin
 		} else {
 			errorMsg = hookCommands.DeintegrationErrorMsg
 		}
-		return fmt.Errorf(errorMsg, binaryPath, err)
+		return fmt.Errorf(errorMsg, bEntryPath, err)
 	}
 	return nil
 }
@@ -189,12 +189,10 @@ func setDefaultValues(config *Config) {
 	config.ProgressbarStyle = 1
 }
 
-// createDefaultConfig creates a default configuration file.
 func createDefaultConfig() error {
 	cfg := Config{}
 	setDefaultValues(&cfg)
 
-	// Set default hooks
 	cfg.Hooks = Hooks{
 		Commands: map[string]HookCommands{
 			".AppBundle": {
@@ -218,7 +216,7 @@ func createDefaultConfig() error {
 				DeintegrationErrorMsg: "[%s] Could not deintegrate from the system via pelfd; Error: %v",
 				UseRunFromCache:       true,
 			},
-			"": { // Normal static binaries don't have an extension, so we're just using a ""
+			"": {
 				IntegrationCommands:   []string{"upx {{binary}}"},
 				DeintegrationCommands: []string{""},
 				IntegrationErrorMsg:   "[%s] Could not be UPXed; Error: %v",
