@@ -73,7 +73,7 @@ type DbinItem struct {
 	Appstream       string   `json:"appstream,omitempty"`
 	GhcrPkg         string   `json:"ghcr_pkg,omitempty"`
 	GhcrBlob        string   `json:"ghcr_blob,omitempty"`
-	Rank            uint16   `json:"rank,omitempty"`
+	Rank            uint   `json:"rank,omitempty"`
 }
 
 type DbinMetadata map[string][]DbinItem
@@ -100,23 +100,6 @@ func fetchAndConvertMetadata(url string, downloadFunc func(string) ([]PkgForgeIt
 		return nil, err
 	}
 
-	var dbinItems []DbinItem
-	for _, item := range items {
-		if item.Name != "" {
-			dbinItem := convertFunc(item)
-			dbinItems = append(dbinItems, dbinItem)
-		}
-	}
-
-	return dbinItems, nil
-}
-/* With bsum enforced:
-func fetchAndConvertMetadata(url string, downloadFunc func(string) ([]PkgForgeItem, error), convertFunc func(PkgForgeItem) DbinItem) ([]DbinItem, error) {
-	items, err := downloadFunc(url)
-	if err != nil {
-		return nil, err
-	}
-
 	bsumMap := make(map[string]DbinItem)
 	for _, item := range items {
 		dbinItem := convertFunc(item)
@@ -131,12 +114,13 @@ func fetchAndConvertMetadata(url string, downloadFunc func(string) ([]PkgForgeIt
 
 	var dbinItems []DbinItem
 	for _, item := range bsumMap {
-		dbinItems = append(dbinItems, item)
+		if item.Name != "" {
+			dbinItems = append(dbinItems, item)
+		}
 	}
 
 	return dbinItems, nil
 }
-*/
 
 func convertPkgForgeToDbinItem(item PkgForgeItem) DbinItem {
 	var categories, provides, downloadURL string
@@ -153,7 +137,7 @@ func convertPkgForgeToDbinItem(item PkgForgeItem) DbinItem {
 		downloadURL = strings.Replace(item.HfPkg, "/tree/main", "/resolve/main", 1) + "/" + item.Pkg
 	}
 
-	rank, _ := strconv.ParseUint(item.Rank, 10, 16)
+	rank, _ := strconv.Atoi(item.Rank)
 
 	if item.PkgType == "archive" {
 		return DbinItem{}
@@ -181,7 +165,7 @@ func convertPkgForgeToDbinItem(item PkgForgeItem) DbinItem {
 		Notes:       item.Note,
 		GhcrPkg:     "oci://" + item.GhcrPkg,
 		GhcrBlob:    "oci://" + item.GhcrBlob,
-		Rank:        uint16(rank),
+		Rank:        uint(rank),
 	}
 }
 
