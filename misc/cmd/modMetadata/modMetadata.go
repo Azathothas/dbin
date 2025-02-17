@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -90,13 +91,7 @@ func (PkgForgeHandler) FetchMetadata(url string) ([]DbinItem, error) {
 type DbinHandler struct{}
 
 func (DbinHandler) FetchMetadata(url string) ([]DbinItem, error) {
-	return fetchOldAppbundleMetadata(url)
-}
-
-type OldDbinMetadata struct {
-	Bin  []DbinItem `json:"bin"`
-	Pkg  []DbinItem `json:"pkg"`
-	Base []DbinItem `json:"base"`
+	return fetchAndConvertMetadata(url, downloadJSON, convertPkgForgeToDbinItem)
 }
 
 func fetchAndConvertMetadata(url string, downloadFunc func(string) ([]PkgForgeItem, error), convertFunc func(PkgForgeItem) DbinItem) ([]DbinItem, error) {
@@ -105,45 +100,13 @@ func fetchAndConvertMetadata(url string, downloadFunc func(string) ([]PkgForgeIt
 		return nil, err
 	}
 
-	bsumMap := make(map[string]DbinItem)
+	var dbinItems []DbinItem
 	for _, item := range items {
 		dbinItem := convertFunc(item)
-		if existingItem, exists := bsumMap[dbinItem.Bsum]; exists {
-			if len(dbinItem.Pkg) < len(existingItem.Pkg) {
-				bsumMap[dbinItem.Bsum] = dbinItem
-			}
-		} else {
-			bsumMap[dbinItem.Bsum] = dbinItem
-		}
-	}
-
-	var dbinItems []DbinItem
-	for _, item := range bsumMap {
-		dbinItems = append(dbinItems, item)
+		dbinItems = append(dbinItems, dbinItem)
 	}
 
 	return dbinItems, nil
-}
-
-func fetchOldAppbundleMetadata(url string) ([]DbinItem, error) {
-	resp, err := http.Get(url)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	var oldAppbundleMetadata OldDbinMetadata
-	err = json.Unmarshal(body, &oldAppbundleMetadata)
-	if err != nil {
-		return nil, err
-	}
-
-	return oldAppbundleMetadata.Pkg, nil
 }
 
 func convertPkgForgeToDbinItem(item PkgForgeItem) DbinItem {
@@ -162,6 +125,10 @@ func convertPkgForgeToDbinItem(item PkgForgeItem) DbinItem {
 	}
 
 	rank, _ := strconv.ParseUint(item.Rank, 10, 16)
+
+	if item.PkgType == "archive" {
+		return DbinItem{}
+	}
 
 	return DbinItem{
 		Pkg:         fmt.Sprintf("%s%s", t(item.Family == item.Name, item.Name, fmt.Sprintf("%s/%s", item.Family, item.Name)), t(item.PkgType != "static", "."+item.PkgType, "")),
@@ -211,6 +178,22 @@ func downloadJSON(url string) ([]PkgForgeItem, error) {
 }
 
 func saveJSON(filename string, metadata DbinMetadata) error {
+	// Replace "musl" with "AAA111Musl"
+	for repo, items := range metadata {
+		for i := range items {
+			items[i].BinId = strings.ReplaceAll(items[i].BinId, "musl", "AAA111Musl")
+		}
+		// Sort items alphabetically by BinId
+		sort.Slice(items, func(i, j int) bool {
+			return items[i].BinId < items[j].BinId
+		})
+		// Replace "AAA111Musl" back to "musl"
+		for i := range items {
+			items[i].BinId = strings.ReplaceAll(items[i].BinId, "AAA111Musl", "musl")
+		}
+		metadata[repo] = items
+	}
+
 	jsonData, err := json.MarshalIndent(metadata, "", "  ")
 	if err != nil {
 		return err
